@@ -109,7 +109,7 @@ set(THIRD_PARTY_LIBS_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../Libraries)
 
 if (${CMAKE_SYSTEM_NAME} MATCHES "Windows")
     add_compile_options(/FS)
-    set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${THIRD_PARTY_LIBS_DIR}/${CMAKE_SYSTEM_NAME}/$<CONFIG>)
+    set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${THIRD_PARTY_LIBS_DIR}/${CMAKE_SYSTEM_NAME}/\$\(Platform\)/$<CONFIG>")
     set(CMAKE_COMPILE_PDB_OUTPUT_DIRECTORY ${CMAKE_LIBRARY_OUTPUT_DIRECTORY})
 endif()
 if (${CMAKE_SYSTEM_NAME} MATCHES "Android")
@@ -117,13 +117,14 @@ if (${CMAKE_SYSTEM_NAME} MATCHES "Android")
 endif()
 if (${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
     add_compile_options(-Wno-shorten-64-to-32)
-    set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${THIRD_PARTY_LIBS_DIR}/${CMAKE_SYSTEM_NAME}/$<CONFIG>)
+    set(CMAKE_OSX_ARCHITECTURES "${CMAKE_SYSTEM_PROCESSOR}")
+    set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${THIRD_PARTY_LIBS_DIR}/${CMAKE_SYSTEM_NAME}/${CMAKE_OSX_ARCHITECTURES}/$<CONFIG>)
 endif()
 if (${CMAKE_SYSTEM_NAME} MATCHES "iOS")
     add_compile_options(-Wno-shorten-64-to-32)
     add_definitions(-DBOOST_NO_CXX98_FUNCTION_BASE)
     set(CMAKE_OSX_ARCHITECTURES arm64)
-    set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${THIRD_PARTY_LIBS_DIR}/${CMAKE_SYSTEM_NAME}/$<CONFIG>)
+    set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${THIRD_PARTY_LIBS_DIR}/${CMAKE_SYSTEM_NAME}/${CMAKE_OSX_ARCHITECTURES}/$<CONFIG>)
 endif()
 
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_LIBRARY_OUTPUT_DIRECTORY})
@@ -142,6 +143,8 @@ option(COMPILE_ENABLE_ALL_THIRD_PARTY_LIBS "COMPILE_ENABLE_ALL_THIRD_PARTY_LIBS"
 # 增加三方库的步骤如下
 
 # 1、增加独立编译的开关
+option(COMPILE_ENABLE_MIMALLOC "COMPILE_ENABLE_MIMALLOC" OFF)
+option(COMPILE_ENABLE_EASTL "COMPILE_ENABLE_EASTL" OFF)
 option(COMPILE_ENABLE_CITYHASH "COMPILE_ENABLE_CITYHASH" OFF)
 option(COMPILE_ENABLE_ONETBB "COMPILE_ENABLE_ONETBB" OFF)
 option(COMPILE_ENABLE_SPDLOG "COMPILE_ENABLE_SPDLOG" OFF)
@@ -150,6 +153,25 @@ option(COMPILE_ENABLE_XXHASH "COMPILE_ENABLE_XXHASH" OFF)
 option(COMPILE_ENABLE_BOOST "COMPILE_ENABLE_BOOST" OFF)
 
 # 2、Include路径
+# MIMALLOC
+if (COMPILE_ENABLE_MIMALLOC OR COMPILE_ENABLE_ALL_THIRD_PARTY_LIBS)
+    set(MI_BUILD_OBJECT OFF CACHE BOOL "" FORCE)
+    set(MI_BUILD_STATIC OFF CACHE BOOL "" FORCE)
+    set(MI_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+    add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/mimalloc")
+    set_target_properties("mimalloc" PROPERTIES FOLDER ${ENGINE_FOLDER_CURRENT})
+    list(APPEND THIRD_PARTY_DEPENDENCY mimalloc)
+endif()
+list(APPEND THIRD_PARTY_INCLUDE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/mimalloc/include")
+
+# EASTL
+if (COMPILE_ENABLE_EASTL OR COMPILE_ENABLE_ALL_THIRD_PARTY_LIBS)
+    add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/EASTL")
+    set_target_properties("EASTL" PROPERTIES FOLDER ${ENGINE_FOLDER_CURRENT})
+    list(APPEND THIRD_PARTY_DEPENDENCY EASTL)
+endif()
+list(APPEND THIRD_PARTY_INCLUDE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/EASTL/include")
+
 # ONETBB
 if (COMPILE_ENABLE_ONETBB OR COMPILE_ENABLE_ALL_THIRD_PARTY_LIBS)
     if (${DST_ABI} MATCHES "armeabi-v7a")
@@ -160,10 +182,11 @@ if (COMPILE_ENABLE_ONETBB OR COMPILE_ENABLE_ALL_THIRD_PARTY_LIBS)
     endif()
     add_definitions("-D__TBB_SOURCE_DIRECTLY_INCLUDED=1")
     set(TBB_TEST OFF CACHE BOOL "" FORCE)
+    set(TBBMALLOC_BUILD OFF CACHE BOOL "" FORCE)
+    set(TBBMALLOC_PROXY_BUILD OFF CACHE BOOL "" FORCE)
     add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/onetbb")
     set_target_properties("tbb" PROPERTIES FOLDER ${ENGINE_FOLDER_CURRENT})
-    set_target_properties("tbbmalloc" PROPERTIES FOLDER ${ENGINE_FOLDER_CURRENT})
-    list(APPEND THIRD_PARTY_DEPENDENCY tbb tbbmalloc)
+    list(APPEND THIRD_PARTY_DEPENDENCY tbb)
 endif()
 list(APPEND THIRD_PARTY_INCLUDE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/onetbb/include")
 
@@ -235,14 +258,17 @@ list(APPEND THIRD_PARTY_INCLUDE_DIR "${CMAKE_CURRENT_SOURCE_DIR}")
 
 # acl
 list(APPEND THIRD_PARTY_INCLUDE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/acl/includes")
+list(APPEND THIRD_PARTY_INCLUDE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/acl/external/rtm/includes")
 
 set(THIRD_PARTY_INCLUDE_DIR ${THIRD_PARTY_INCLUDE_DIR} PARENT_SCOPE)
-set(THIRD_PARTY_LIBS_DIR ${THIRD_PARTY_LIBS_DIR} PARENT_SCOPE)
+set(THIRD_PARTY_LIBS_DIR ${CMAKE_LIBRARY_OUTPUT_DIRECTORY} PARENT_SCOPE)
 
-# 2、Lib路径
+# 3、Lib路径
 if (${CMAKE_SYSTEM_NAME} MATCHES "Windows")
     list(APPEND THIRD_PARTY_LIBS_DEBUG
-        tbbmalloc_debug.lib tbb12_debug.lib
+        mimalloc.dll.lib
+        EASTL.lib
+        tbb12_debug.lib
         spdlogd.lib
         uint256_t.lib
         cityhash.lib
@@ -250,7 +276,9 @@ if (${CMAKE_SYSTEM_NAME} MATCHES "Windows")
         libboost_atomic-vc143-mt-gd-x64-1_86.lib libboost_charconv-vc143-mt-gd-x64-1_86.lib libboost_chrono-vc143-mt-gd-x64-1_86.lib libboost_container-vc143-mt-gd-x64-1_86.lib libboost_context-vc143-mt-gd-x64-1_86.lib libboost_contract-vc143-mt-gd-x64-1_86.lib libboost_coroutine-vc143-mt-gd-x64-1_86.lib libboost_date_time-vc143-mt-gd-x64-1_86.lib libboost_exception-vc143-mt-gd-x64-1_86.lib libboost_fiber-vc143-mt-gd-x64-1_86.lib libboost_filesystem-vc143-mt-gd-x64-1_86.lib libboost_graph-vc143-mt-gd-x64-1_86.lib libboost_iostreams-vc143-mt-gd-x64-1_86.lib libboost_json-vc143-mt-gd-x64-1_86.lib libboost_locale-vc143-mt-gd-x64-1_86.lib libboost_log-vc143-mt-gd-x64-1_86.lib libboost_log_setup-vc143-mt-gd-x64-1_86.lib libboost_math_c99-vc143-mt-gd-x64-1_86.lib libboost_math_c99f-vc143-mt-gd-x64-1_86.lib libboost_math_c99l-vc143-mt-gd-x64-1_86.lib libboost_math_tr1-vc143-mt-gd-x64-1_86.lib libboost_math_tr1f-vc143-mt-gd-x64-1_86.lib libboost_math_tr1l-vc143-mt-gd-x64-1_86.lib libboost_nowide-vc143-mt-gd-x64-1_86.lib libboost_prg_exec_monitor-vc143-mt-gd-x64-1_86.lib libboost_process-vc143-mt-gd-x64-1_86.lib libboost_program_options-vc143-mt-gd-x64-1_86.lib libboost_random-vc143-mt-gd-x64-1_86.lib libboost_regex-vc143-mt-gd-x64-1_86.lib libboost_serialization-vc143-mt-gd-x64-1_86.lib libboost_stacktrace_from_exception-vc143-mt-gd-x64-1_86.lib libboost_stacktrace_noop-vc143-mt-gd-x64-1_86.lib libboost_stacktrace_windbg-vc143-mt-gd-x64-1_86.lib libboost_stacktrace_windbg_cached-vc143-mt-gd-x64-1_86.lib libboost_system-vc143-mt-gd-x64-1_86.lib libboost_test_exec_monitor-vc143-mt-gd-x64-1_86.lib libboost_thread-vc143-mt-gd-x64-1_86.lib libboost_timer-vc143-mt-gd-x64-1_86.lib libboost_type_erasure-vc143-mt-gd-x64-1_86.lib libboost_unit_test_framework-vc143-mt-gd-x64-1_86.lib libboost_url-vc143-mt-gd-x64-1_86.lib libboost_wave-vc143-mt-gd-x64-1_86.lib libboost_wserialization-vc143-mt-gd-x64-1_86.lib
     )
     list(APPEND THIRD_PARTY_LIBS_RELEASE
-        tbbmalloc.lib tbb12.lib
+        mimalloc.dll.lib
+        EASTL.lib
+        tbb12.lib
         spdlog.lib
         uint256_t.lib
         cityhash.lib
@@ -259,7 +287,7 @@ if (${CMAKE_SYSTEM_NAME} MATCHES "Windows")
     )
 elseif (${CMAKE_SYSTEM_NAME} MATCHES "Android")
     list(APPEND THIRD_PARTY_LIBS_DEBUG
-        libtbb_debug.a libtbbmalloc_debug.a
+        libtbb_debug.a
         libspdlogd.a
         libuint256_t.a
         libcityhash.a
@@ -268,7 +296,7 @@ elseif (${CMAKE_SYSTEM_NAME} MATCHES "Android")
     )
 
     list(APPEND THIRD_PARTY_LIBS_RELEASE
-        libtbb.a libtbbmalloc.a
+        libtbb.a
         libspdlog.a
         libuint256_t.a
         libcityhash.a
@@ -277,7 +305,7 @@ elseif (${CMAKE_SYSTEM_NAME} MATCHES "Android")
     )
 elseif (${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
     list(APPEND THIRD_PARTY_LIBS_DEBUG
-        libtbb_debug.a libtbbmalloc_debug.a
+        libtbb_debug.a
         libspdlogd.a
         libuint256_t.a
         libcityhash.a
@@ -286,7 +314,7 @@ elseif (${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
     )
 
     list(APPEND THIRD_PARTY_LIBS_RELEASE
-        libtbb.a libtbbmalloc.a
+        libtbb.a
         libspdlog.a
         libuint256_t.a
         libcityhash.a
@@ -296,7 +324,7 @@ elseif (${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
 
 elseif (${CMAKE_SYSTEM_NAME} MATCHES "iOS")
     list(APPEND THIRD_PARTY_LIBS_DEBUG
-        libtbb_debug.a libtbbmalloc_debug.a
+        libtbb_debug.a
         libspdlogd.a
         libuint256_t.a
         libcityhash.a
@@ -305,7 +333,7 @@ elseif (${CMAKE_SYSTEM_NAME} MATCHES "iOS")
     )
 
     list(APPEND THIRD_PARTY_LIBS_RELEASE
-        libtbb.a libtbbmalloc.a
+        libtbb.a
         libspdlog.a
         libuint256_t.a
         libcityhash.a
