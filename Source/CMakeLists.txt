@@ -146,28 +146,28 @@ list(APPEND THIRD_PARTY_INCLUDE_DIR "${CMAKE_CURRENT_SOURCE_DIR}")
 # BOOST
 if (COMPILE_ENABLE_BOOST OR COMPILE_ENABLE_ALL_THIRD_PARTY_LIBS)
     if (${CMAKE_SYSTEM_NAME} MATCHES "Windows")
-        add_custom_target(boost_build ALL
+        add_custom_target(BOOST_BUILD ALL
             COMMAND cmd.exe /c "\"${VS_CMD_PATH}\" && bootstrap.bat && cd ${CMAKE_CURRENT_SOURCE_DIR}/boost && b2.exe stage architecture=x86 address-model=64 link=static cxxflags=/std:c++20 $<IF:$<CONFIG:Debug>, debug, release> --stagedir=build/$<CONFIG>"
             WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/boost)
-        add_custom_target(boost_copy ALL
+        add_custom_target(BOOST_COPY ALL
             COMMAND ${CMAKE_COMMAND} -E remove_directory ${CMAKE_CURRENT_SOURCE_DIR}/boost/build/$<CONFIG>/lib/cmake
             COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_CURRENT_SOURCE_DIR}/boost/build/$<CONFIG>/lib ${CMAKE_LIBRARY_OUTPUT_DIRECTORY}/$<CONFIG>)
-        add_dependencies(boost_copy boost_build)
-        list(APPEND THIRD_PARTY_DEPENDENCY boost_copy)
+        add_dependencies(BOOST_COPY BOOST_BUILD)
+        list(APPEND THIRD_PARTY_DEPENDENCY BOOST_COPY)
     elseif (${CMAKE_SYSTEM_NAME} MATCHES "Android")
         # Android Windows编译不过，需要在linux上编译，因此直接保留2进制在output目录下
     elseif (${CMAKE_SYSTEM_NAME} MATCHES "Darwin" OR ${CMAKE_SYSTEM_NAME} MATCHES "iOS")
-        add_custom_target(boost_build ALL
+        add_custom_target(BOOST_BUILD ALL
             COMMAND /bin/zsh build_for_engine/build.sh ${CMAKE_SYSTEM_NAME} $<CONFIG> build/$<CONFIG>
             WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/boost)
-        add_custom_target(boost_copy ALL
+        add_custom_target(BOOST_COPY ALL
             COMMAND ${CMAKE_COMMAND} -E remove_directory ${CMAKE_CURRENT_SOURCE_DIR}/boost/build/$<CONFIG>/lib/cmake
             COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_CURRENT_SOURCE_DIR}/boost/build/$<CONFIG>/lib ${CMAKE_LIBRARY_OUTPUT_DIRECTORY}/$<CONFIG>)
-        add_dependencies(boost_copy boost_build)
-        list(APPEND THIRD_PARTY_DEPENDENCY boost_copy)
+        add_dependencies(BOOST_COPY BOOST_BUILD)
+        list(APPEND THIRD_PARTY_DEPENDENCY BOOST_COPY)
     endif()
-    set_target_properties("boost_build" PROPERTIES FOLDER ${THIRD_PARTY_FOLDER_CURRENT})
-    set_target_properties("boost_copy" PROPERTIES FOLDER ${THIRD_PARTY_FOLDER_CURRENT})
+    set_target_properties("BOOST_BUILD" PROPERTIES FOLDER ${THIRD_PARTY_FOLDER_CURRENT})
+    set_target_properties("BOOST_COPY" PROPERTIES FOLDER ${THIRD_PARTY_FOLDER_CURRENT})
 endif()
 list(APPEND THIRD_PARTY_INCLUDE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/boost")
 
