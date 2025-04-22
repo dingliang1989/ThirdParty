@@ -1,6 +1,6 @@
-﻿Binaries
-Build
-Libraries
-Source/boost/bin.v2
-Source/boost/b2.exe
-Source/boost/project-config.jam
+﻿Binaries/*
+Build/*
+Libraries/*
+Source/boost_1_86_0/bin.v2
+Source/boost_1_86_0/b2.exe
+Source/boost_1_86_0/project-config.jam
